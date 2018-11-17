@@ -1,0 +1,7 @@
+<RCC>
+    <qresource prefix="/">
+        <file>main.qml</file>
+        <file>shader_triangle.vert</file>
+        <file>shader_triangle.frag</file>
+    </qresource>
+</RCC>
