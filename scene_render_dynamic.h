@@ -14,6 +14,7 @@ public:
     void setViewportSize(const QSize &size) { m_viewportSize = size; }
     void setWindow(QQuickWindow *window) { m_window = window; }
     void setMesh(const vector<TriangleMesh>& meshes);
+    void setCamera(const glm::vec3& pos, const glm::vec3& dir);
 public slots:
     void paint();
 private:
@@ -39,7 +40,8 @@ private:
     QOpenGLVertexArrayObject *m_vao;
     bool m_gl_context_inited;
     int m_shader_program_id;
-
+    glm::vec3 m_camera_pos;
+    glm::vec3 m_camera_dir;
     bool m_mesh_reloaded;
     vector<TriangleMesh> m_meshes;  //不同的mesh只是uniform的值不同
 };

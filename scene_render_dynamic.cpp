@@ -17,6 +17,13 @@ SceneRenderDynamic::~SceneRenderDynamic(){
     delete m_program;
 }
 
+void SceneRenderDynamic::setCamera(const glm::vec3 &pos, const glm::vec3& dir){
+    glm::vec3 y_axis = glm::vec3(0, 1, 0);
+    assert(glm::cross(y_axis, dir) != glm::vec3(0, 0, 0));      //约定相机方向不能指向正上方（否则无法指定up）
+    m_camera_dir = dir;
+    m_camera_pos = pos;
+}
+
 void SceneRenderDynamic::setMesh(const vector<TriangleMesh>& meshes){
     m_mesh_reloaded = true;
     m_meshes = meshes;
@@ -84,10 +91,14 @@ void SceneRenderDynamic::useVertexData(){
 void SceneRenderDynamic::useParameter(){
     glm::mat4 model(1.f);
     model[3][3] = 1.f;  //设置为1才是缩放
+
+    glm::vec3 up = glm::cross(m_camera_dir, glm::vec3(0, 1, 0));
+    up = glm::normalize(glm::cross(up, m_camera_dir));
     glm::mat4 view = glm::lookAt(
-                glm::vec3(0, 0, 10),
-                glm::vec3(0, 0, 0),
-                glm::vec3(0, 1, 0));
+                m_camera_pos,
+                m_camera_pos + m_camera_dir,
+                up);
+
     glm::mat4 projection = glm::perspective(
                 glm::radians(45.f),
                 static_cast<float>(m_viewportSize.width()) / m_viewportSize.height(),
