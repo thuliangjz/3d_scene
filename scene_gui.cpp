@@ -14,10 +14,18 @@ SceneGUI::SceneGUI(): m_render_dynamic(nullptr), m_scene_reloaded(false),
     m_camera_pos = glm::vec3(0.f, 0.f, 10.f);
     m_camera_dir = -glm::normalize(m_camera_pos);
     m_epsilon_move = 1e-5f;
-    m_delta_move = 0.1f;
+    m_delta_move = .5f;
     m_delta_rotate_h = glm::radians(3.f);
     m_delta_rotate_v = glm::radians(.2f);
     max_pitch = glm::radians(89.f);
+    m_fov = 45.f;
+}
+
+void SceneGUI::zoom(qreal angle_delta){
+    m_fov += static_cast<float>(-angle_delta) * .01f;
+    const float max_fov = 89, min_fov = 5;
+    m_fov = m_fov > max_fov ? max_fov : m_fov;
+    m_fov = m_fov < min_fov ? min_fov : m_fov;
 }
 
 void SceneGUI::handleWindowChanged(QQuickWindow *win){
@@ -108,6 +116,7 @@ void SceneGUI::sync(){
     m_render_dynamic->setViewportSize(window()->size() * window()->devicePixelRatio());
     m_render_dynamic->setWindow(window());
     m_render_dynamic->setCamera(m_camera_pos, m_camera_dir);
+    m_render_dynamic->setFov(m_fov);
     if(m_scene_reloaded){
         m_scene_reloaded = false;
         m_render_dynamic->setMesh(m_triangle_meshes);
@@ -156,5 +165,11 @@ TriangleMesh SceneGUI::processTriMesh(aiMesh* mesh, const aiScene* scene){
             indices.push_back(mesh->mFaces[i].mIndices[j]);
         }
     }
-    return TriangleMesh(vertices, indices);
+    //设置表面参数
+    aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+    aiColor3D color_disfuse(0, 0, 0), color_spec(0, 0, 0), color_amb(0, 0, 0);
+    material->Get(AI_MATKEY_COLOR_AMBIENT, color_amb);
+    material->Get(AI_MATKEY_COLOR_DIFFUSE, color_disfuse);
+    material->Get(AI_MATKEY_COLOR_SPECULAR, color_spec);
+    return TriangleMesh(vertices, indices, aiColor3Toglm3(color_amb), aiColor3Toglm3(color_disfuse), aiColor3Toglm3(color_spec));
 }

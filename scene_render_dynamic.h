@@ -15,6 +15,7 @@ public:
     void setWindow(QQuickWindow *window) { m_window = window; }
     void setMesh(const vector<TriangleMesh>& meshes);
     void setCamera(const glm::vec3& pos, const glm::vec3& dir);
+    void setFov(float fov){m_fov = fov;}
 public slots:
     void paint();
 private:
@@ -44,5 +45,6 @@ private:
     glm::vec3 m_camera_dir;
     bool m_mesh_reloaded;
     vector<TriangleMesh> m_meshes;  //不同的mesh只是uniform的值不同
+    float m_fov;
 };
 #endif

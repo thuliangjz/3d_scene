@@ -27,21 +27,6 @@ void SceneRenderDynamic::setCamera(const glm::vec3 &pos, const glm::vec3& dir){
 void SceneRenderDynamic::setMesh(const vector<TriangleMesh>& meshes){
     m_mesh_reloaded = true;
     m_meshes = meshes;
-
-    //mesh for test use
-    /*
-    float v[] = {
-        .5f, .5f, .5f, 0.f, 0.f, 0.f,
-        .5f, -.5f, .5f, 0.f, 0.f, 0.f,
-        -.5f, -.5f, .5f, 0.f, 0.f, 0.f,
-        -.5f, .5f, .5f, 0.f, 0.f, 0.f,
-    };
-    int idxs[] = {
-        0, 1, 2,
-        1, 2, 3
-    };
-    m_meshes.clear();
-    */
 }
 
 void SceneRenderDynamic::prepareVertexData(){
@@ -100,7 +85,7 @@ void SceneRenderDynamic::useParameter(){
                 up);
 
     glm::mat4 projection = glm::perspective(
-                glm::radians(45.f),
+                glm::radians(m_fov),
                 static_cast<float>(m_viewportSize.width()) / m_viewportSize.height(),
                 0.1f, 100.f);
     glm::mat3 normalization = glm::mat3(glm::transpose(glm::inverse(model)));
@@ -115,24 +100,22 @@ void SceneRenderDynamic::useParameter(){
     m_program->setUniformValue("view", qview);
     m_program->setUniformValue("projection", qprojection);
     m_program->setUniformValue("normalization", qnormalization);
-    vector<QVector3D> v;
-    for(auto &mesh :m_meshes){
-        for(auto &vtx: mesh.vertices){
-            QVector3D v_tmp(static_cast<float>(vtx.normal.x), vtx.normal.y, vtx.normal.z);
-            v.push_back(QVector3D(v_tmp.x(),
-                                  v_tmp.y(),
-                                  v_tmp.z()));
-        }
-    }
-    v.clear();
-//    m_program->setUniformValue("normalization", QMatrix3x3());
-//    m_program->setUniformValue("light_pos", QVector3D(0, 10, 0));
-//    m_program->setUniformValue("view_pos", QVector3D(0, 0, -1));
-//    m_program->setUniformValue("light_color", QVector3D(1.0, 1., 1.));
+    m_program->setUniformValue("light_pos", QVector3D(0, 2, 0));
+    m_program->setUniformValue("light_color", QVector3D(.5f, .5f, .5f) * 2);
+    m_program->setUniformValue("view_pos", QVector3D(m_camera_pos.x, m_camera_pos.y, m_camera_pos.z));
 }
 
 void SceneRenderDynamic::useMeshData(int idx_mesh){
-    m_program->setUniformValue("object_color", QVector3D(1.0, 1., idx_mesh %2 == 0 ? 1. : 0.));
+    m_program->setUniformValue("k_a", QVector3D(m_meshes[idx_mesh].k_a.r,
+                                                m_meshes[idx_mesh].k_a.g,
+                                                m_meshes[idx_mesh].k_a.b));
+    m_program->setUniformValue("k_d", QVector3D(m_meshes[idx_mesh].k_d.r,
+                                            m_meshes[idx_mesh].k_d.g,
+                                            m_meshes[idx_mesh].k_d.b));
+    m_program->setUniformValue("k_s", QVector3D(m_meshes[idx_mesh].k_s.r,
+                                            m_meshes[idx_mesh].k_s.g,
+                                            m_meshes[idx_mesh].k_s.b));
+
 }
 
 inline void SceneRenderDynamic::bindObjects(){
@@ -178,38 +161,13 @@ void SceneRenderDynamic::paint(){
     glClear(GL_COLOR_BUFFER_BIT);
     glDisable(GL_BLEND);
     int *start = nullptr;
-    for(auto &mesh : m_meshes){
-        glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, start);
-        start += mesh.indices.size();
-    }
-    unbindObjects();
-    m_window->resetOpenGLState();
-
-    /*
-    if(!m_gl_context_inited)
-        init();
-    if(m_mesh_reloaded){
-        prepareVertexData();
-        useVertexData();
-        m_mesh_reloaded = false;
-    }
-    if(!m_vao || !m_vbo || !m_ebo)
-        return;
-    bindObjects();
-    useParameter();
-    glViewport(0, 0, m_viewportSize.width(), m_viewportSize.height());
-    glEnable(GL_DEPTH_TEST);
-    glClearColor(0, 0, 0, 1);
-    glClear(GL_COLOR_BUFFER_BIT);
-    int *start = nullptr;
     int idx_mesh = 0;
     for(auto &mesh : m_meshes){
         useMeshData(idx_mesh);
-        glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_INT, start);
+        glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, start);
         start += mesh.indices.size();
         ++idx_mesh;
     }
     unbindObjects();
     m_window->resetOpenGLState();
-    */
 }

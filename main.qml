@@ -32,5 +32,6 @@ ApplicationWindow {
     Component.onCompleted: {
         navagator.Keys.pressed.connect(navagator.navKeyPressHandler(scene))
         navagator.navMousePosChanged.connect(navagator.navMouseMovHandler(scene))
+        navagator.navMouseWhl.connect(navagator.navMouseWhlHandler(scene))
     }
 }

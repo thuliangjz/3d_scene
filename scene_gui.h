@@ -28,6 +28,7 @@ public:
     Q_INVOKABLE void paint();
     Q_INVOKABLE bool updateCameraPos(int move_state);
     Q_INVOKABLE bool updateCameraDir(qreal d_x, qreal d_y);
+    Q_INVOKABLE void zoom(qreal angle_delta);
 public slots:
     void sync();
     void cleanup();
@@ -48,6 +49,8 @@ private:
     float m_epsilon_move;
     float m_delta_rotate_h;
     float m_delta_rotate_v;
+    float m_delta_fov;
+    float m_fov;
     float max_pitch;
     bool m_cursor_hidden;
     QWidget *m_mouse_area;

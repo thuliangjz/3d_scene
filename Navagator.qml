@@ -4,6 +4,7 @@ Item {
     id: navagator
     property bool navagating: false
     signal navMousePosChanged(real x, real y)
+    signal navMouseWhl(real delta_y)
     function navKeyPressHandler(scene){
         return function(event){
             if(!navagating)
@@ -47,6 +48,13 @@ Item {
             scene.updateCameraDir(x, y)
         }
     }
+    function navMouseWhlHandler(scene){
+        return function(delta_y){
+            scene.zoom(delta_y)
+            scene.paint()
+        }
+    }
+
     onNavagatingChanged: {
         if(navagating){
             mouse_controller.hideCursor()
@@ -71,6 +79,10 @@ Item {
                 navagator.navMousePosChanged(delta.x, delta.y)
                 mouse_controller.resetMousePos()
             }
+        }
+        onWheel: {
+            if(navagating)
+                navagator.navMouseWhl(wheel.angleDelta.y)
         }
     }
 }
