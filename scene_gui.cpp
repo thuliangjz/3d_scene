@@ -7,7 +7,8 @@
 SceneGUI::SceneGUI(): m_render_dynamic(nullptr), m_scene_reloaded(false),
     m_cursor_hidden(false){
     connect(this, &QQuickItem::windowChanged, this, &SceneGUI::handleWindowChanged);
-    if(!loadScene("airboat.obj")){
+    m_obj_dir = "windmill/";
+    if(!loadScene(m_obj_dir + "Windmill.obj")){
         exit(-1);
     }
 
@@ -119,7 +120,7 @@ void SceneGUI::sync(){
     m_render_dynamic->setFov(m_fov);
     if(m_scene_reloaded){
         m_scene_reloaded = false;
-        m_render_dynamic->setMesh(m_triangle_meshes);
+        m_render_dynamic->setMesh(m_triangle_meshes, this);
     }
 }
 
@@ -131,6 +132,10 @@ bool SceneGUI::loadScene(const string name){
         return false;
     }
     m_triangle_meshes.clear();
+    //注意在loadScene中只负责清空，指针指向对象真正的删除在render对象中(当render线程实现了将代码拷贝到gui线程之后)
+    m_texture_imgs.clear();
+    m_textures.clear();
+    m_map_name2img.clear();
     processTriNode(scene->mRootNode, scene);
     //注意scene随着importer的析构而失效
     m_scene_reloaded = true;
@@ -158,6 +163,10 @@ TriangleMesh SceneGUI::processTriMesh(aiMesh* mesh, const aiScene* scene){
         v.normal.x = mesh->mNormals[i].x;
         v.normal.y = mesh->mNormals[i].y;
         v.normal.z = mesh->mNormals[i].z;
+        if(mesh->mTextureCoords[0]){
+            v.tex_uv.x = mesh->mTextureCoords[0][i].x;
+            v.tex_uv.y = mesh->mTextureCoords[0][i].y;
+        }
         vertices.push_back(v);
     }
     for(int i = 0; i < mesh->mNumFaces; ++i){
@@ -171,5 +180,33 @@ TriangleMesh SceneGUI::processTriMesh(aiMesh* mesh, const aiScene* scene){
     material->Get(AI_MATKEY_COLOR_AMBIENT, color_amb);
     material->Get(AI_MATKEY_COLOR_DIFFUSE, color_disfuse);
     material->Get(AI_MATKEY_COLOR_SPECULAR, color_spec);
-    return TriangleMesh(vertices, indices, aiColor3Toglm3(color_amb), aiColor3Toglm3(color_disfuse), aiColor3Toglm3(color_spec));
+    //加载纹理，当前支持的纹理包括环境，漫反射和镜面反射纹理
+    aiTextureType type_textures[] = {aiTextureType_AMBIENT, aiTextureType_DIFFUSE, aiTextureType_SPECULAR};
+    vector<int> idx_textures;
+    for(int i = 0; i < sizeof(type_textures) / sizeof(aiTextureType); ++i){
+        vector<int> idxs_tmp = loadMeshTexture(material, type_textures[i]);
+        idx_textures.insert(idx_textures.end(), idxs_tmp.begin(), idxs_tmp.end());
+    }
+    return TriangleMesh(vertices, indices, aiColor3Toglm3(color_amb), aiColor3Toglm3(color_disfuse), aiColor3Toglm3(color_spec), idx_textures);
+}
+
+vector<int> SceneGUI::loadMeshTexture(aiMaterial* material, aiTextureType type){
+    vector<int> result;
+    for(int i = 0; i < material->GetTextureCount(type); ++i){
+        aiString astr_name;
+        material->GetTexture(type, i, &astr_name);
+        string name(astr_name.C_Str());
+        struct FileTexture texture_tmp;
+        texture_tmp.type = type;
+        if(m_map_name2img.find(name) == m_map_name2img.end()){
+            m_map_name2img[name] = m_texture_imgs.size();
+            QImage *img = new QImage((m_obj_dir + name).c_str());
+            if(!img->isNull())
+                m_texture_imgs.push_back(img);
+        }
+        texture_tmp.idx_image = m_map_name2img[name];
+        result.push_back(m_textures.size());
+        m_textures.push_back(texture_tmp);
+    }
+    return result;
 }

@@ -1,4 +1,5 @@
 #include "scene_render_dynamic.h"
+#include "scene_gui.h"
 #include <glm/vec3.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -24,9 +25,28 @@ void SceneRenderDynamic::setCamera(const glm::vec3 &pos, const glm::vec3& dir){
     m_camera_pos = pos;
 }
 
-void SceneRenderDynamic::setMesh(const vector<TriangleMesh>& meshes){
+void SceneRenderDynamic::setMesh(const vector<TriangleMesh>& meshes, SceneGUI *gui){
     m_mesh_reloaded = true;
     m_meshes = meshes;
+    map<aiTextureType, uint> m;
+    m[aiTextureType_AMBIENT] = TYPE_UNIT_AMBIENT;
+    m[aiTextureType_DIFFUSE] = TYPE_UNIT_DIFFUSE;
+    m[aiTextureType_SPECULAR] = TYPE_UNIT_SPECULAR;
+    for(int i = 0; i < m_meshes.size(); ++i){
+        m_meshes[i].idx_textures.clear();
+        for(auto &idx : meshes[i].idx_textures){
+            SceneGUI::FileTexture tex = gui->m_textures[idx];
+            //将FileTexture中的type映射到texture unit
+            RenderTexture tex_r;
+            tex_r.id_sampler = m[tex.type];
+            //如果存在QImage的分裂，则原先到img的映射也需要相应的进行修改
+            tex_r.idx_texture_obj = tex.idx_image;
+            m_meshes[i].idx_textures.push_back(m_textures.size());
+
+            m_textures.push_back(tex_r);
+        }
+    }
+    m_img_gui = gui->m_texture_imgs;
 }
 
 void SceneRenderDynamic::prepareVertexData(){
@@ -60,14 +80,30 @@ void SceneRenderDynamic::prepareVertexData(){
     unbindObjects();
 }
 
+void SceneRenderDynamic::prepareTexture() {
+    for(auto & pt_texture : m_texture_objs){
+        delete  pt_texture;
+    }
+    for(auto & pt_img : m_img_gui){
+        QOpenGLTexture *t = new QOpenGLTexture(*pt_img);
+        t->setMagnificationFilter(QOpenGLTexture::Linear);
+        t->setMagnificationFilter(QOpenGLTexture::Linear);
+        t->setWrapMode(QOpenGLTexture::Repeat);
+        m_texture_objs.push_back(t);
+        delete pt_img;
+    }
+}
+
 void SceneRenderDynamic::useVertexData(){
     bindObjects();
     m_program->bind();
     m_program->enableAttributeArray(0);
     m_program->enableAttributeArray(1);
+    m_program->enableAttributeArray(2);
 
     m_program->setAttributeBuffer(0, GL_FLOAT, offsetof(Vertex, pos), 3, sizeof(Vertex));
     m_program->setAttributeBuffer(1, GL_FLOAT, offsetof(Vertex, normal), 3, sizeof(Vertex));
+    m_program->setAttributeBuffer(2, GL_FLOAT, offsetof(Vertex, tex_uv), 2, sizeof(Vertex));
 
     unbindObjects();
 
@@ -115,7 +151,22 @@ void SceneRenderDynamic::useMeshData(int idx_mesh){
     m_program->setUniformValue("k_s", QVector3D(m_meshes[idx_mesh].k_s.r,
                                             m_meshes[idx_mesh].k_s.g,
                                             m_meshes[idx_mesh].k_s.b));
+    using std::pair;
+    typedef map<uint, pair<string, string>> map_id2name;
+    map_id2name m;
+    m[TYPE_UNIT_AMBIENT] = pair<string, string>("texture_ambient", "use_ambient_sample");
+    m[TYPE_UNIT_DIFFUSE] = pair<string, string>("texture_diffuse", "use_diffuse_sample");
+    m[TYPE_UNIT_SPECULAR] = pair<string, string>("texture_specular", "use_specular_sample");
 
+    for(auto i : m_meshes[idx_mesh].idx_textures){
+        m_program->setUniformValue(m[m_textures[i].id_sampler].first.c_str(), m_textures[i].id_sampler);
+        m_texture_objs[m_textures[i].idx_texture_obj]->bind(m_textures[i].id_sampler);
+        m_program->setUniformValue(m[m_textures[i].id_sampler].second.c_str(), 0);
+        m.erase(m_textures[i].id_sampler);
+    }
+    for(auto& p : m){
+        m_program->setUniformValue(p.second.second.c_str(), 1);
+    }
 }
 
 inline void SceneRenderDynamic::bindObjects(){
@@ -140,6 +191,7 @@ void SceneRenderDynamic::init(){
     m_program->addShaderFromSourceFile(QOpenGLShader::Fragment, ":/phong.frag");
     m_program->bindAttributeLocation("pos_vtx", 0);
     m_program->bindAttributeLocation("normal_vtx", 1);
+    m_program->bindAttributeLocation("tex_uv", 2);
     m_program->link();
 }
 
@@ -150,6 +202,7 @@ void SceneRenderDynamic::paint(){
     if(m_mesh_reloaded){
         prepareVertexData();
         useVertexData();
+        prepareTexture();
         m_mesh_reloaded = false;
     }
     bindObjects();
@@ -157,7 +210,7 @@ void SceneRenderDynamic::paint(){
     glViewport(0, 0, m_viewportSize.width(), m_viewportSize.height());
     glEnable(GL_DEPTH_TEST);
 
-    glClearColor(0,0,0,1);
+    glClearColor(0.3f,0.2f,0.1f,1);
     glClear(GL_COLOR_BUFFER_BIT);
     glDisable(GL_BLEND);
     int *start = nullptr;

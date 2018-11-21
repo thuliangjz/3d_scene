@@ -10,6 +10,7 @@ int main(int argc, char *argv[])
     qmlRegisterType<NavagatorMouseController>("MyScene", 1, 0, "NavMouseController");
     QQmlApplicationEngine engine;
     engine.load(QUrl(QStringLiteral("qrc:/main.qml")));
+
     if (engine.rootObjects().isEmpty())
         return -1;
 

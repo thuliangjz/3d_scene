@@ -1,8 +1,6 @@
 <RCC>
     <qresource prefix="/">
         <file>main.qml</file>
-        <file>shader_triangle.vert</file>
-        <file>shader_triangle.frag</file>
         <file>phong.vert</file>
         <file>phong.frag</file>
         <file>Navagator.qml</file>
