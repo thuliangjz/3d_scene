@@ -7,12 +7,12 @@
 SceneGUI::SceneGUI(): m_render_dynamic(nullptr), m_scene_reloaded(false),
     m_cursor_hidden(false){
     connect(this, &QQuickItem::windowChanged, this, &SceneGUI::handleWindowChanged);
-    m_obj_dir = "windmill/";
+    m_obj_dir = "./windmill/";
     if(!loadScene(m_obj_dir + "Windmill.obj")){
         exit(-1);
     }
 
-    m_camera_pos = glm::vec3(0.f, 0.f, 10.f);
+    m_camera_pos = glm::vec3(0.f, 0.f, 100.f);
     m_camera_dir = -glm::normalize(m_camera_pos);
     m_epsilon_move = 1e-5f;
     m_delta_move = .5f;

@@ -8,7 +8,9 @@
 SceneRenderDynamic::SceneRenderDynamic():
     m_window(nullptr), m_program(nullptr),
     m_vbo(nullptr), m_ebo(nullptr), m_vao(nullptr),
-    m_gl_context_inited(false), m_mesh_reloaded(false){
+    m_program_shadow(nullptr), m_shadow_fbo(nullptr), size_shadow(1024, 1024),
+    m_gl_context_inited(false), m_mesh_reloaded(false),
+    m_light_dir_parallel(0.000755426, -0.910683, -0.413106), m_magnitude(1.f){
 }
 
 SceneRenderDynamic::~SceneRenderDynamic(){
@@ -70,6 +72,7 @@ void SceneRenderDynamic::prepareVertexData(){
         idxs.insert(idxs.end(), idx_tmp.begin(), idx_tmp.end());
         v.insert(v.end(), mesh.vertices.begin(), mesh.vertices.end());
     }
+    m_count_triangles = idxs.size();
     m_vbo->create();
     m_vbo->bind();
     m_vbo->allocate(v.data(), sizeof(Vertex) * v.size());
@@ -94,6 +97,35 @@ void SceneRenderDynamic::prepareTexture() {
     }
 }
 
+void SceneRenderDynamic::renderDepthMap(){
+    m_shadow_fbo->bind();
+    glViewport(0, 0, size_shadow.width(), size_shadow.height());
+    glEnable(GL_DEPTH_TEST);
+
+    glClearColor(1.f,1.f,1.f,1);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glDisable(GL_BLEND);
+    m_program_shadow->bind();
+    m_vao->bind();
+    m_program_shadow->setUniformValue("light_transform", getParallelLightTransform() * getModelMatrix());
+    glDrawElements(GL_TRIANGLES, m_count_triangles, GL_UNSIGNED_INT, nullptr);
+    m_program_shadow->release();
+    m_vao->release();
+    m_shadow_fbo->release();
+    m_shadow_fbo->toImage().save("shadow.png");
+}
+
+void SceneRenderDynamic::attachShadow(){
+    uint tex_id = m_shadow_fbo->texture();
+    glActiveTexture(GL_TEXTURE0 + TYPE_UNIT_SHADOW);
+    glBindTexture(GL_TEXTURE_2D, tex_id);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    float border_color[] = {1., 1., 1., 1.};
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, border_color);
+    m_program->setUniformValue("texture_shadow", TYPE_UNIT_SHADOW);
+}
+
 void SceneRenderDynamic::useVertexData(){
     bindObjects();
     m_program->bind();
@@ -105,12 +137,33 @@ void SceneRenderDynamic::useVertexData(){
     m_program->setAttributeBuffer(1, GL_FLOAT, offsetof(Vertex, normal), 3, sizeof(Vertex));
     m_program->setAttributeBuffer(2, GL_FLOAT, offsetof(Vertex, tex_uv), 2, sizeof(Vertex));
 
+    m_program_shadow->bind();
+    m_program_shadow->enableAttributeArray("pos_vtx");
+    m_program_shadow->release();
     unbindObjects();
 
 }
 
+QMatrix4x4 SceneRenderDynamic::getModelMatrix(){
+    glm::mat4 model(m_magnitude);
+    model[3][3] = 1.f;  //设置为1才是缩放
+    return QMatrix4x4(&glm::transpose(model)[0][0]);
+}
+
+QMatrix4x4 SceneRenderDynamic::getParallelLightTransform(){
+    const float sz_h = 50, sz_z = 100;
+    glm::mat4 projection = glm::ortho(-sz_h, sz_h, -sz_h, sz_h, .1f, sz_z);
+
+    glm::vec3 pos = glm::vec3(5.76574, 79, 3.66934);
+    glm::mat4 view_light = glm::lookAt(
+                pos,
+                pos + m_light_dir_parallel,
+                glm::vec3(0, 1, 0));
+    return QMatrix4x4(&glm::transpose(projection * view_light)[0][0]);
+}
+
 void SceneRenderDynamic::useParameter(){
-    glm::mat4 model(1.f);
+    glm::mat4 model(m_magnitude);
     model[3][3] = 1.f;  //设置为1才是缩放
 
     glm::vec3 up = glm::cross(m_camera_dir, glm::vec3(0, 1, 0));
@@ -123,7 +176,9 @@ void SceneRenderDynamic::useParameter(){
     glm::mat4 projection = glm::perspective(
                 glm::radians(m_fov),
                 static_cast<float>(m_viewportSize.width()) / m_viewportSize.height(),
-                0.1f, 100.f);
+                0.1f, 300.f);
+//    const float sz_h = 50, sz_z = 100;
+//    glm::mat4 projection = glm::ortho(-sz_h, sz_h, -sz_h, sz_h, .1f, sz_z);
     glm::mat3 normalization = glm::mat3(glm::transpose(glm::inverse(model)));
     model = glm::transpose(model); view = glm::transpose(view);
     projection = glm::transpose(projection); normalization = glm::transpose(normalization);
@@ -136,9 +191,12 @@ void SceneRenderDynamic::useParameter(){
     m_program->setUniformValue("view", qview);
     m_program->setUniformValue("projection", qprojection);
     m_program->setUniformValue("normalization", qnormalization);
-    m_program->setUniformValue("light_pos", QVector3D(0, 2, 0));
+    m_program->setUniformValue("light_dir_parallel", QVector3D(m_light_dir_parallel.x,
+                                                               m_light_dir_parallel.y,
+                                                               m_light_dir_parallel.z));
     m_program->setUniformValue("light_color", QVector3D(.5f, .5f, .5f) * 2);
     m_program->setUniformValue("view_pos", QVector3D(m_camera_pos.x, m_camera_pos.y, m_camera_pos.z));
+    m_program->setUniformValue("light_transform", getParallelLightTransform() * getModelMatrix());
 }
 
 void SceneRenderDynamic::useMeshData(int idx_mesh){
@@ -161,11 +219,11 @@ void SceneRenderDynamic::useMeshData(int idx_mesh){
     for(auto i : m_meshes[idx_mesh].idx_textures){
         m_program->setUniformValue(m[m_textures[i].id_sampler].first.c_str(), m_textures[i].id_sampler);
         m_texture_objs[m_textures[i].idx_texture_obj]->bind(m_textures[i].id_sampler);
-        m_program->setUniformValue(m[m_textures[i].id_sampler].second.c_str(), 0);
+        m_program->setUniformValue(m[m_textures[i].id_sampler].second.c_str(), 0.f);
         m.erase(m_textures[i].id_sampler);
     }
     for(auto& p : m){
-        m_program->setUniformValue(p.second.second.c_str(), 1);
+        m_program->setUniformValue(p.second.second.c_str(), 1.f);
     }
 }
 
@@ -193,6 +251,13 @@ void SceneRenderDynamic::init(){
     m_program->bindAttributeLocation("normal_vtx", 1);
     m_program->bindAttributeLocation("tex_uv", 2);
     m_program->link();
+
+    m_program_shadow = new QOpenGLShaderProgram();
+    m_program_shadow->addShaderFromSourceFile(QOpenGLShader::Vertex, ":/shadow.vert");
+    m_program_shadow->addShaderFromSourceFile(QOpenGLShader::Fragment, ":/shadow.frag");
+    m_program_shadow->link();
+
+    m_shadow_fbo = new QOpenGLFramebufferObject(size_shadow, QOpenGLFramebufferObject::Depth);
 }
 
 void SceneRenderDynamic::paint(){
@@ -203,6 +268,7 @@ void SceneRenderDynamic::paint(){
         prepareVertexData();
         useVertexData();
         prepareTexture();
+        renderDepthMap();
         m_mesh_reloaded = false;
     }
     bindObjects();
@@ -211,8 +277,9 @@ void SceneRenderDynamic::paint(){
     glEnable(GL_DEPTH_TEST);
 
     glClearColor(0.3f,0.2f,0.1f,1);
-    glClear(GL_COLOR_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glDisable(GL_BLEND);
+    attachShadow();
     int *start = nullptr;
     int idx_mesh = 0;
     for(auto &mesh : m_meshes){

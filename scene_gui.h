@@ -1,6 +1,7 @@
 #ifndef SCENE_GUI
 #define SCENE_GUI
 #include <QtQuick/QQuickItem>
+#include <QVector>
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -31,6 +32,12 @@ public:
     Q_INVOKABLE bool updateCameraPos(int move_state);
     Q_INVOKABLE bool updateCameraDir(qreal d_x, qreal d_y);
     Q_INVOKABLE void zoom(qreal angle_delta);
+    Q_INVOKABLE QVector3D getDirection(){return QVector3D(m_camera_dir.x,
+                                                          m_camera_dir.y,
+                                                          m_camera_dir.z);}
+    Q_INVOKABLE QVector3D getPosition(){return QVector3D(m_camera_pos.x,
+                                                    m_camera_pos.y,
+                                                    m_camera_pos.z);}
 public:
     struct FileTexture{
         aiTextureType type;

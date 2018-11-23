@@ -6,11 +6,13 @@
 #include <QtGui/QOpenGLVertexArrayObject>
 #include <QtGui/QOpenGLTexture>
 #include <QtQuick/QQuickWindow>
+#include <QtGui/QOpenGLFramebufferObject>
 #include "geometry.h"
 
 #define TYPE_UNIT_AMBIENT 0
 #define TYPE_UNIT_DIFFUSE 1
 #define TYPE_UNIT_SPECULAR 2
+#define TYPE_UNIT_SHADOW 3
 
 class SceneGUI;
 class SceneRenderDynamic: public QObject, protected QOpenGLFunctions{
@@ -43,12 +45,20 @@ private:
     inline void bindObjects();
     inline void unbindObjects();
     void prepareTexture();
+    void renderDepthMap();
+    void attachShadow();
+    QMatrix4x4 getModelMatrix();
+    QMatrix4x4 getParallelLightTransform();
 private:
     QSize m_viewportSize;
     QQuickWindow *m_window;
     QOpenGLShaderProgram *m_program;
     QOpenGLBuffer *m_vbo, *m_ebo;
     QOpenGLVertexArrayObject *m_vao;
+
+    QOpenGLShaderProgram *m_program_shadow;
+    QOpenGLFramebufferObject *m_shadow_fbo;
+    const QSize size_shadow;
 
     vector<RenderTexture> m_textures;
     vector<QOpenGLTexture*> m_texture_objs;
@@ -60,6 +70,9 @@ private:
     glm::vec3 m_camera_dir;
     bool m_mesh_reloaded;
     vector<TriangleMesh> m_meshes;  //不同的mesh只是uniform的值不同
+    int m_count_triangles;
     float m_fov;
+    glm::vec3 m_light_dir_parallel;
+    float m_magnitude;
 };
 #endif

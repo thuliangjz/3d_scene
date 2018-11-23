@@ -13,6 +13,10 @@ Item {
             scene.updateCameraPos(type_mv)
             if(event.key === Qt.Key_Escape)
                 navagating = false
+            if(event.key === Qt.Key_J)
+                console.log("direction: ",scene.getDirection())
+            if(event.key === Qt.Key_K)
+                console.log("position: ", scene.getPosition())
         }
     }
     function getMoveType(key){

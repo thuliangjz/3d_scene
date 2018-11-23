@@ -4,5 +4,7 @@
         <file>phong.vert</file>
         <file>phong.frag</file>
         <file>Navagator.qml</file>
+        <file>shadow.vert</file>
+        <file>shadow.frag</file>
     </qresource>
 </RCC>
