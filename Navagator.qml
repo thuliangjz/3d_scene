@@ -7,8 +7,6 @@ Item {
     signal navMouseWhl(real delta_y)
     function navKeyPressHandler(scene){
         return function(event){
-            if(!navagating)
-                return
             var type_mv = getMoveType(event.key)
             scene.updateCameraPos(type_mv)
             if(event.key === Qt.Key_Escape)
@@ -17,6 +15,10 @@ Item {
                 console.log("direction: ",scene.getDirection())
             if(event.key === Qt.Key_K)
                 console.log("position: ", scene.getPosition())
+            if(event.key === Qt.Key_T)
+                scene.startRayTracing()
+            if(event.key === Qt.Key_N)
+                navagating = !navagating
         }
     }
     function getMoveType(key){

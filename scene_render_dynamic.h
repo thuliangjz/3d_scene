@@ -8,7 +8,7 @@
 #include <QtQuick/QQuickWindow>
 #include <QtGui/QOpenGLFramebufferObject>
 #include "geometry.h"
-
+#include <glm/mat4x4.hpp>
 #define TYPE_UNIT_AMBIENT 0
 #define TYPE_UNIT_DIFFUSE 1
 #define TYPE_UNIT_SPECULAR 2
@@ -25,6 +25,22 @@ public:
     void setMesh(const vector<TriangleMesh>& meshes, SceneGUI* gui);
     void setCamera(const glm::vec3& pos, const glm::vec3& dir);
     void setFov(float fov){m_fov = fov;}
+    void setLightParam(int type, glm::vec3 pos, glm::vec3 dir){
+        m_light_type = type;
+        m_light_pos = pos;
+        m_light_dir = dir;
+        m_shadow_valid = false;
+    }
+    void setLightProj(int type, glm::mat4 mat){
+        if(type == LIGHT_POINT)
+            m_light_proj_pstv = mat;
+        else
+            m_light_proj_ortho = mat;
+        m_shadow_valid = false;
+    }
+    void setViewProj(glm::mat4 mat){
+        m_view_projection = mat;
+    }
 public slots:
     void paint();
 
@@ -48,7 +64,7 @@ private:
     void renderDepthMap();
     void attachShadow();
     QMatrix4x4 getModelMatrix();
-    QMatrix4x4 getParallelLightTransform();
+    QMatrix4x4 getLightTransform();
 private:
     QSize m_viewportSize;
     QQuickWindow *m_window;
@@ -72,7 +88,15 @@ private:
     vector<TriangleMesh> m_meshes;  //不同的mesh只是uniform的值不同
     int m_count_triangles;
     float m_fov;
-    glm::vec3 m_light_dir_parallel;
     float m_magnitude;
+
+    int m_light_type;
+    glm::vec3 m_light_pos;  //m_light_pos和m_light_dir用于设置view矩阵
+    glm::vec3 m_light_dir;
+    glm::mat4 m_light_proj_ortho, m_light_proj_pstv;
+    bool m_shadow_valid;
+
+    glm::mat4 m_view_projection;
+    float m_bias;
 };
 #endif

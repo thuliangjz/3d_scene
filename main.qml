@@ -18,16 +18,16 @@ ApplicationWindow {
             anchors.fill: parent
         }
     }
-    MouseArea{
-        id: ma_window
-        x:0
-        y:0
-        width: 100
-        height: 100
-        onClicked: {
-            navagator.navagating = !navagator.navagating
-        }
-    }
+//    MouseArea{
+//        id: ma_window
+//        x:0
+//        y:0
+//        width: 100
+//        height: 100
+//        onClicked: {
+//            navagator.navagating = !navagator.navagating
+//        }
+//    }
 
     Component.onCompleted: {
         navagator.Keys.pressed.connect(navagator.navKeyPressHandler(scene))

@@ -35,5 +35,22 @@ public:
     vector<int> idx_textures;   //只保留索引而不保留具体存储什么数值，为信息交互提供一个统一的接口
 };
 
+struct FileTexture{
+    aiTextureType type;
+    int idx_image;
+};      //GUI作为实现转换的中心，这个结构也应该放在公共头文件中
+
+#define LIGHT_PARALLEL 0
+#define LIGHT_POINT 1
+
+struct LightParam{
+    int type;
+    union {
+        glm::vec3 pos;
+        glm::vec3 dir;
+    };
+    glm::vec3 color;
+};
+
 extern glm::vec3 aiColor3Toglm3(const aiColor3D& color);
 #endif

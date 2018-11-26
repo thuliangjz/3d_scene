@@ -17,6 +17,8 @@ add_executable(${PROJECT_NAME}
     "scene_gui.h" "scene_gui.cpp"
     "scene_render_dynamic.h" "scene_render_dynamic.cpp"
     "geometry.h" "geometry.cpp"
-    "navagator_mouse_controller.h" "navagator_mouse_controller.cpp")
+    "navagator_mouse_controller.h" "navagator_mouse_controller.cpp"
+    "ray_tracer.h" "ray_tracer.cpp"
+    "utils.h")
 target_compile_definitions(${PROJECT_NAME} PRIVATE $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:QT_QML_DEBUG>)
 target_link_libraries(${PROJECT_NAME} PRIVATE Qt5::Core Qt5::Quick ${ASSIMP_LIBRARIES} ${OPENGL_LIBRARIES})

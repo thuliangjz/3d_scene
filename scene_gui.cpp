@@ -4,22 +4,43 @@
 #include <unistd.h>
 #include <glm/glm.hpp>
 #include <QGuiApplication>
+#include "utils.h"
 SceneGUI::SceneGUI(): m_render_dynamic(nullptr), m_scene_reloaded(false),
-    m_cursor_hidden(false){
+    m_cursor_hidden(false), m_tracer_working(false){
+    initFromCmd();
     connect(this, &QQuickItem::windowChanged, this, &SceneGUI::handleWindowChanged);
-    m_obj_dir = "./windmill/";
-    if(!loadScene(m_obj_dir + "Windmill.obj")){
-        exit(-1);
-    }
 
-    m_camera_pos = glm::vec3(0.f, 0.f, 100.f);
-    m_camera_dir = -glm::normalize(m_camera_pos);
+//    m_obj_dir = "./";
+//    m_obj_name = "simple_scene.obj";
+//    m_camera_pos = glm::vec3(8.94211, 5.5, -0.641418);
+//    m_camera_dir = glm::vec3(-0.951188, -0.293211, -0.0962711);
+//    m_bias = 0.005f;
+//    m_flip_normal = true;
+//    m_light_type = LIGHT_PARALLEL;
+//    m_light_pos = glm::vec3(6.9383, 4.5, -1.58225);
+//    m_light_dir = glm::vec3(-0.981657, -0.1906, 0.00459649);
+//    m_light_mat = glm::ortho(-10.f, 10.f, -10.f, 10.f, 1.f, 590.f);
+
     m_epsilon_move = 1e-5f;
     m_delta_move = .5f;
+    m_sz_camera = 1.f;
     m_delta_rotate_h = glm::radians(3.f);
     m_delta_rotate_v = glm::radians(.2f);
     max_pitch = glm::radians(89.f);
     m_fov = 45.f;
+    m_z_near = .1f;
+    m_z_far = 300.f;
+    m_ray_tracer = new RayTracer();
+    m_ray_tracer->moveToThread(&m_thread_tracer);
+    connect(&m_thread_tracer, &QThread::finished, m_ray_tracer, &QObject::deleteLater);
+    connect(this, &SceneGUI::tracerStart, m_ray_tracer, &RayTracer::work);
+    connect(m_ray_tracer, &RayTracer::traceFinished, this, &SceneGUI::tracerFinished);
+    connect(m_ray_tracer, &RayTracer::processUpdated, this, &SceneGUI::tracerProcessUpdated);
+    m_thread_tracer.start();
+
+    if(!loadScene(m_obj_dir + m_obj_name)){
+        exit(-1);
+    }
 }
 
 void SceneGUI::zoom(qreal angle_delta){
@@ -77,8 +98,8 @@ bool SceneGUI::updateCameraPos(int move_state){
         mv_delta = glm::vec3(0.f,0.f,0.f);
         break;
     }
-    m_camera_pos += mv_delta;
     glm::vec3 pos_old = m_camera_pos;
+    m_camera_pos += mv_delta;
     if(collisionCheck()){
         m_camera_pos = pos_old;
     }
@@ -101,6 +122,22 @@ bool SceneGUI::updateCameraDir(qreal d_x, qreal d_y){
 }
 
 bool SceneGUI::collisionCheck(){
+    float sz = 0.5f;
+    glm::vec3 v0 = m_camera_pos - sz * glm::vec3(1,1,1);
+    glm::vec3 e1 = sz * glm::vec3(1, 0, 0),
+            e2 = sz * glm::vec3(0, 1, 0),
+            e3 = sz * glm::vec3(0, 0, 1);
+    for(auto &box : m_bounding_boxes){
+        for(int i = 0; i < 8; ++i){
+            float t1 = (i & 1) ? 0 : 1;
+            float t2 = (i & 2) ? 0 : 1;
+            float t3 = (i & 4) ? 0 : 1;
+            glm::vec3 v_c = v0 + t1 * e1 + t2 * e2 + t3 * e3;
+            if((glm::all(glm::lessThan(v_c, box.second))) &&
+                 glm::all(glm::greaterThan(v_c, box.first)))
+                return true;
+        }
+    }
     return false;
 }
 
@@ -121,7 +158,9 @@ void SceneGUI::sync(){
     if(m_scene_reloaded){
         m_scene_reloaded = false;
         m_render_dynamic->setMesh(m_triangle_meshes, this);
+        setRenderLight();
     }
+    setRenderViewProj();
 }
 
 bool SceneGUI::loadScene(const string name){
@@ -139,6 +178,7 @@ bool SceneGUI::loadScene(const string name){
     processTriNode(scene->mRootNode, scene);
     //注意scene随着importer的析构而失效
     m_scene_reloaded = true;
+    generateBoundingBxs();
     return true;
 }
 
@@ -155,14 +195,15 @@ void SceneGUI::processTriNode(aiNode* node, const aiScene* scene){
 TriangleMesh SceneGUI::processTriMesh(aiMesh* mesh, const aiScene* scene){
     vector<int> indices;
     vector<Vertex> vertices;
+    float sgn = m_flip_normal ? -1 : 1;
     for(int i = 0; i < mesh->mNumVertices; ++i){
         Vertex v;
         v.pos.x = mesh->mVertices[i].x;
         v.pos.y = mesh->mVertices[i].y;
         v.pos.z = mesh->mVertices[i].z;
-        v.normal.x = mesh->mNormals[i].x;
-        v.normal.y = mesh->mNormals[i].y;
-        v.normal.z = mesh->mNormals[i].z;
+        v.normal.x = sgn * mesh->mNormals[i].x;
+        v.normal.y = sgn * mesh->mNormals[i].y;
+        v.normal.z = sgn * mesh->mNormals[i].z;
         if(mesh->mTextureCoords[0]){
             v.tex_uv.x = mesh->mTextureCoords[0][i].x;
             v.tex_uv.y = mesh->mTextureCoords[0][i].y;
@@ -209,4 +250,108 @@ vector<int> SceneGUI::loadMeshTexture(aiMaterial* material, aiTextureType type){
         m_textures.push_back(texture_tmp);
     }
     return result;
+}
+
+bool SceneGUI::startRayTracing(){
+    if(m_tracer_working)
+        return false;
+    TraceParam* p_param = new TraceParam;
+    p_param->meshes = m_triangle_meshes;
+    p_param->camera_dir = m_camera_dir; p_param->camera_pos = m_camera_pos;
+    p_param->fov = m_fov; p_param->z_near = m_z_near; p_param->z_far = m_z_far;
+    p_param->sz_img = QSize(window()->size() * window()->devicePixelRatio());
+    p_param->light.color = glm::vec3(1, 1, 1);
+    p_param->light.dir = m_light_type == LIGHT_POINT ? m_light_pos : m_light_dir;
+    tracerStart(static_cast<void*>(p_param));
+    m_tracer_working = true;
+    return true;
+}
+
+void SceneGUI::tracerFinished(QImage* result){
+    result->save("ray_tracing.png");
+    qDebug() << "finished";
+    m_tracer_working = false;
+}
+
+void SceneGUI::tracerProcessUpdated(int process){
+    QSize s(window()->size() * window()->devicePixelRatio());
+    qDebug() << process << "/" << s.width() * s.height();
+}
+
+void SceneGUI::setRenderLight(){
+    m_render_dynamic->setLightParam(m_light_type,
+                                    m_light_pos,
+                                    m_light_dir);
+    m_render_dynamic->setLightProj(m_light_type, m_light_mat);
+}
+
+void SceneGUI::setRenderViewProj(){
+    QSizeF sz = window()->size() * window()->devicePixelRatio();
+    glm::mat4 projection = glm::perspective(glm::radians(m_fov),
+                                            static_cast<float>(sz.width() / sz.height()),
+                                            m_z_near, m_z_far);
+//    float h = 50.f;
+//    glm::mat4 projection = glm::ortho(-h, h, -h, h, .1f, 300.f);
+    m_render_dynamic->setViewProj(projection);
+}
+
+void SceneGUI::initFromCmd(){
+    if(cmd_cnt < CMD_COUNT){
+        qDebug() << "please use provided shell script to start";
+        exit(-1);
+    }
+    m_obj_dir = cmd_args[CMD_OBJ_DIR];
+    m_obj_name = cmd_args[CMD_OBJ_NAME];
+    m_camera_pos = getVec3FromString(cmd_args[CMD_CAMERA_POS]);
+    m_camera_dir = getVec3FromString(cmd_args[CMD_CAMERA_DIR]);
+    m_bias = QString(cmd_args[CMD_BIAS]).toFloat();
+    m_flip_normal = QString(cmd_args[CMD_FLIP_NORMAL]) == "true";
+    m_light_type = QString(cmd_args[CMD_LIGHT_TYPE]) == "point" ? LIGHT_POINT : LIGHT_PARALLEL;
+    m_light_pos = getVec3FromString(cmd_args[CMD_LIGHT_POS]);
+    m_light_dir = getVec3FromString(cmd_args[CMD_LIGHT_DIR]);
+    vector<float> v = getFloatsFromString(cmd_args[CMD_LIGHT_MAT]);
+    if(v.size() != 3){
+        qDebug() << "error setting light type";
+        exit(-1);
+    }
+
+    if(m_light_type == LIGHT_PARALLEL){
+        m_light_mat = glm::ortho(-v[0], v[0], -v[0], v[0], v[1], v[2]);
+    }
+    else{
+        m_light_mat = glm::perspective(v[0], 1.f, v[1], v[2]);
+    }
+}
+
+glm::vec3 SceneGUI::getVec3FromString(const char* str){
+    vector<float> v = getFloatsFromString(str);
+    return glm::vec3(v[0], v[1], v[2]);
+}
+
+vector<float> SceneGUI::getFloatsFromString(const char* str){
+    vector<float> v;
+    bool b;
+    QStringList lst = QString(str).split(" ");
+    for(auto &s : lst){
+        float f = s.toFloat(&b);
+        if(b)
+            v.push_back(f);
+    }
+    return v;
+}
+
+void SceneGUI::generateBoundingBxs(){
+    m_bounding_boxes.clear();
+    for(auto &mesh : m_triangle_meshes){
+        std::pair<glm::vec3, glm::vec3> box;
+        for(int i = 0; i < 3; ++i){
+            box.first.data.data[i] = mesh.vertices[0].pos.data.data[i];
+            box.second.data.data[i] = mesh.vertices[0].pos.data.data[i];
+            for(auto &v : mesh.vertices){
+                box.first.data.data[i] = std::min(box.first.data.data[i], v.pos.data.data[i]);
+                box.second.data.data[i] = std::max(box.second.data.data[i], v.pos.data.data[i]);
+            }
+        }
+        m_bounding_boxes.push_back(box);
+    }
 }
